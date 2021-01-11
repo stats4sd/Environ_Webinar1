@@ -54,6 +54,11 @@ Valley<- raw %>%
 ```{r}
 datatable(Valley)
 ```
+Writing this out to a csv file in case i need it offline
+
+```{r}
+write.csv(Valley,"Valley.csv",row.names = FALSE)
+```
 
 
 ### 'Descriptive' analysis
