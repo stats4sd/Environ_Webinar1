@@ -1,0 +1,242 @@
+# Statistics for Environmental Science
+
+## Week 1 - R code used in Webinar 
+
+
+```{r}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+```
+
+### Data
+
+Importing the data directly from the metoffice website.
+https://www.metoffice.gov.uk/pub/data/weather/uk/climate/stationdata/valleydata.txt
+
+Whole thing needs a bit of trial and error to get the best option for formats. But using the url() function to read directly from a url along with read.table - since the data is a tab seperated plain text file - can give something workable with a few tweaks.
+
+```{r}
+raw<- read.table(
+  url("https://www.metoffice.gov.uk/pub/data/weather/uk/climate/stationdata/valleydata.txt"),
+  skip=5,
+  header=TRUE,
+  fill=TRUE,
+  na.strings="---")
+```
+
+Check into the data
+```{r}
+datatable(raw)
+```
+
+Now we need some more tidying up the data to make it useful.
+
+First line is just units. Can remove from the data frame.
+
+Because of the forced data input some rows have 'provisional' flags in the year column and nothing else. Lets drop those. This is a weird side effect of the autodetection of columns - this is actually in the 8th column, but since it doesnt appear til way down the bottom it gets thrown into a new row in the first column. Not actually a problem here - as we can remove this - but can be a problem othertimes. 
+
+The Provisional values have * next tp the number. So R doesnt see as numbers it sees text. We need to remove the * and convert to numbers.
+
+Also to make plotting time series easier we can create a date column by smashing month and year together. Lazily lets just take the 1st of every month rather than worry about month-year formats.
+
+```{r}
+
+Valley<- raw %>%
+  slice(-1) %>%
+    filter(yyyy !="Provisional") %>%
+      mutate_all(~str_remove(.,"[*]")) %>%
+        mutate_all(~as.numeric(.)) %>%
+          mutate(Date=as.Date(paste(yyyy,mm,"01",sep="-")))
+```
+
+```{r}
+datatable(Valley)
+```
+
+
+### 'Descriptive' analysis
+
+Pull out table of summary statistics for some columns. Lots of different alternatives for this. My code is probably not the most obvious way of getting there - but it works for pivotting the whole dataset into long format and then choosing what stats to present using group_by and summarise.
+
+```{r}
+Valley %>% 
+  select(tmin,tmax,af,rain,sun) %>%
+  pivot_longer(cols=tmin:sun,names_to = "variable",values_to="values")%>%
+  group_by(variable) %>%
+  summarise(n=sum(is.na(values)==F),mean=mean(values,na.rm=T),sd=sd(values,na.rm=T),median=median(values,na.rm=T),
+            min=min(values,na.rm=T),max=max(values,na.rm=T)) 
+```
+
+Make some basic plots. Some good/some bad
+
+```{r}
+
+ggplot(Valley,aes(y=tmax,x=Date))+
+  geom_line()
+
+```
+
+
+```{r}
+
+ggplot(Valley,aes(y=tmax,x=Date))+
+  geom_col()
+
+```
+
+
+```{r}
+
+ggplot(Valley,aes(y=tmax,x=Date))+
+  geom_point()
+
+```
+
+```{r}
+
+ggplot(Valley,aes(y=tmax,x=Date))+
+  geom_line()+
+    coord_polar()
+
+```
+
+```{r}
+
+ggplot(Valley,aes(x=tmax))+
+  geom_histogram()
+
+```
+
+```{r}
+
+ggplot(Valley,aes(y=tmax,x=yyyy,group=yyyy))+
+  geom_boxplot()
+
+```
+
+
+## 'Exploratory' analysis
+
+
+First question - is there a trend in average temperature over time?
+
+Create average temperature variable
+
+Obtain annual average
+
+Plot over time
+
+Add smoother line
+
+Remove 1930 (since turns out we only have December 1930)
+
+```{r}
+Valley %>%
+      mutate(tmean=(tmax+tmin)/2) %>%
+        group_by(yyyy) %>%
+          summarise(tmean=mean(tmean)) %>%
+            filter(yyyy>1930) %>%
+            ggplot(aes(y=tmean,x=yyyy))+
+              geom_line()+
+                geom_smooth(se=F)
+
+```
+
+### Seasonality
+
+Use facets to show each month in its own panel.
+Compare average temperatures in each month to monthly reference average. Arbitrarily set this reference average to be years prior to 1960.
+Add additional line at y=0 to aid identification of trends.
+
+
+```{r}
+Valley %>%
+      mutate(tmean=(tmax+tmin)/2) %>%
+        mutate(reference=ifelse(yyyy<=1960,tmean,NA)) %>%
+          group_by(mm) %>%
+            mutate(reference_mean=mean(reference,na.rm=T))%>%
+            mutate(anomaly=tmean-reference_mean) %>%
+            ggplot(aes(y=anomaly,x=yyyy))+
+   geom_hline(yintercept = 0,col="red",alpha=0.5)+
+              geom_line()+
+                 geom_smooth(se=F)+
+                  labs(col="mm")+
+                    facet_wrap(~mm)+
+                      ggtitle("Difference in monthly average temperatures compared to period 1931-1960")
+
+```
+### Changes in Rainfall
+
+'Lazy' option:
+
+Cut and paste temperature plot
+
+```{r}
+Valley %>%
+        group_by(yyyy) %>%
+          summarise(rain=sum(rain)) %>%
+            filter(yyyy>1930) %>%
+            ggplot(aes(y=rain,x=yyyy))+
+              geom_line()+
+                geom_smooth(se=F)
+
+```
+But instead we could look at distributions:
+
+Take first 20 years of data and compare to most recent 20 years of data.
+Use a density plot or a histogram
+
+Density plot can more easily overlay - histograms you want on top of each other in panels
+
+```{r}
+Valley %>%
+   filter((yyyy<=1950|yyyy>=2001)) %>%
+  mutate(group=ifelse(yyyy<=1950,"1931-1950","2001-2020")) %>%
+  ggplot(aes(x=rain,fill=group)) +
+  geom_density(alpha=0.5)
+
+```
+
+```{r}
+
+Valley %>%
+   filter((yyyy<=1950|yyyy>=2001)) %>%
+  mutate(group=ifelse(yyyy<=1950,"1931-1950","2001-2020")) %>%
+  ggplot(aes(x=rain,fill=group)) +
+  geom_histogram(alpha=0.5)+
+  facet_wrap(~group,ncol=1)
+```
+
+
+### Extremes
+
+Or we can look at frequency of extreme months. Let's define extreme months as being dry if less than 25mm rain; and wet if having more than 125mm rain.
+
+```{r}
+Valley %>%
+  group_by(yyyy) %>%
+    summarise(dry=sum(rain<25)) %>%
+  filter(yyyy>1930) %>%
+ggplot(aes(y=dry,x=yyyy))+
+  geom_line()+
+    scale_x_continuous(breaks=seq(1930,2020,by=5))+
+      geom_smooth(se=FALSE)+
+  ggtitle("Number of 'dry' months",subtitle = "rain < 25mm")
+```
+
+```{r}
+Valley %>%
+  group_by(yyyy) %>%
+    summarise(wet=sum(rain>125)) %>%
+  filter(yyyy>1930) %>%
+ggplot(aes(y=wet,x=yyyy))+
+  geom_line()+
+    scale_x_continuous(breaks=seq(1930,2020,by=5))+
+      geom_smooth(se=FALSE)+
+  ggtitle("Number of 'wet' months",subtitle = "rain > 125mm")
+```
+
+
+
