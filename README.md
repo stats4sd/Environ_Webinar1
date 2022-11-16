@@ -1,6 +1,6 @@
 # Environ Webinar
 
-This repository contains materials for _R Code Used in Week 1 Webinar_  as part of the Statistics for Environmental Science course.
+This repository contains the shiny app _R Code Used in Week 1 Webinar_ developed for the Statistics for Environmental Science webinar series.
 
 https://shiny.stats4sd.org/Environ_Webinar1/
 
